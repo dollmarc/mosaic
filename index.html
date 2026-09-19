@@ -1,0 +1,1453 @@
+<title>Mosaic Grid Scaler</title>
+<style>
+  :root{
+    --bg:#EDF1F2;
+    --panel:#FFFFFF;
+    --stage:#E3EAEC;
+    --grid-line:#D8E0E3;
+    --ink:#0D1618;
+    --ink-2:#47595F;
+    --ink-3:#7A8C92;
+    --line:#D7DFE2;
+    --line-strong:#B8C5C9;
+    --tile:#A9BABF;
+    --tile-edge:#94A7AD;
+    --tile-ink:#15242A;
+    --tile-ink-2:#3E5158;
+    --glyph:rgba(255,255,255,.46);
+    --cyan:#0A6F84;
+    --kelp:#2B7156;
+    --amber:#8F5E10;
+    --amber-bg:#F6EEDC;
+    --on-accent:#FFFFFF;
+    --field:#F4F7F8;
+    --shadow:0 1px 2px rgba(13,22,24,.05), 0 10px 28px -20px rgba(13,22,24,.35);
+    --ui:"Helvetica Neue",Helvetica,Arial,"Liberation Sans",sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#071013;
+      --panel:#0D1A1E;
+      --stage:#0A1619;
+      --grid-line:#132428;
+      --ink:#E8F1F3;
+      --ink-2:#9DB0B6;
+      --ink-3:#6C848B;
+      --line:#1A2C31;
+      --line-strong:#2A444B;
+      --tile:#86989F;
+      --tile-edge:#9AACB2;
+      --tile-ink:#0B1A1F;
+      --tile-ink-2:#2E464E;
+      --glyph:rgba(255,255,255,.40);
+      --cyan:#5CCBE6;
+      --kelp:#6FC79B;
+      --amber:#E2A952;
+      --amber-bg:#231A0C;
+      --on-accent:#062026;
+      --field:#101F24;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -20px rgba(0,0,0,.9);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#071013;
+    --panel:#0D1A1E;
+    --stage:#0A1619;
+    --grid-line:#132428;
+    --ink:#E8F1F3;
+    --ink-2:#9DB0B6;
+    --ink-3:#6C848B;
+    --line:#1A2C31;
+    --line-strong:#2A444B;
+    --tile:#86989F;
+    --tile-edge:#9AACB2;
+    --tile-ink:#0B1A1F;
+    --tile-ink-2:#2E464E;
+    --glyph:rgba(255,255,255,.40);
+    --cyan:#5CCBE6;
+    --kelp:#6FC79B;
+    --amber:#E2A952;
+    --amber-bg:#231A0C;
+    --on-accent:#062026;
+    --field:#101F24;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -20px rgba(0,0,0,.9);
+  }
+
+  *{box-sizing:border-box}
+  /* Elements below set an explicit display, which outranks the browser's own
+     [hidden] rule. Declare it here so hiding works in a bare file too. */
+  [hidden]{display:none !important}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--ui);
+    font-size:14px;
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{
+    max-width:1180px;
+    margin:0 auto;
+    padding-inline:20px;
+    padding-block:28px 40px;
+  }
+
+  /* ---------- header ---------- */
+  .head{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:16px 24px;
+    padding-bottom:16px;
+    border-bottom:1px solid var(--line);
+  }
+  h1{
+    margin:0;
+    font-size:26px;
+    font-weight:700;
+    letter-spacing:-.021em;
+    text-wrap:balance;
+  }
+  .sub{
+    margin:5px 0 0;
+    max-width:56ch;
+    color:var(--ink-2);
+    font-size:13.5px;
+  }
+  .ratiochip{
+    display:flex;
+    align-items:baseline;
+    gap:9px;
+    padding:8px 13px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    background:var(--panel);
+    white-space:nowrap;
+  }
+  .ratiochip .k{
+    font-size:10px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--ink-3);
+  }
+  .ratiochip .v{
+    font-family:var(--mono);
+    font-size:15px;
+    font-variant-numeric:tabular-nums;
+    letter-spacing:-.01em;
+  }
+
+  /* ---------- layout ---------- */
+  .cols{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 322px;
+    gap:22px;
+    margin-top:22px;
+    align-items:start;
+  }
+  @media (max-width:960px){
+    .cols{grid-template-columns:minmax(0,1fr)}
+  }
+
+  /* ---------- stage ---------- */
+  .stage{
+    position:relative;
+    background:var(--stage);
+    background-image:
+      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+    background-size:24px 24px;
+    background-position:-1px -1px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    height:clamp(560px,86vh,1280px);
+    min-height:380px;
+    max-height:2400px;
+    resize:vertical;
+    overflow:hidden;
+    display:flex;
+  }
+  .stage-inner{
+    margin:auto;
+    padding:44px 34px 34px 46px;
+    position:relative;
+  }
+  @media (max-width:640px){
+    .stage-inner{padding:34px 22px 26px 36px}
+  }
+  .frame{position:relative}
+  .mosaic{
+    position:relative;
+    width:120px;
+    height:120px;
+  }
+  .mosaic.dragging .tile{transition:none}
+
+  /* dimension lines */
+  .dim{
+    position:absolute;
+    color:var(--stage-ink, var(--ink-3));
+    font-family:var(--mono);
+    font-size:10px;
+    font-variant-numeric:tabular-nums;
+    pointer-events:none;
+  }
+  .dim-t{
+    top:-27px; left:0; right:0;
+    display:flex; align-items:center; gap:8px;
+  }
+  .dim-t::before,.dim-t::after{
+    content:""; flex:1; height:1px; background:var(--stage-line, var(--line-strong));
+  }
+  .dim-l{
+    left:-32px; top:0; bottom:0;
+    display:flex; flex-direction:column; align-items:center; gap:8px;
+  }
+  .dim-l::before,.dim-l::after{
+    content:""; flex:1; width:1px; background:var(--stage-line, var(--line-strong));
+  }
+  .dim-l span{writing-mode:vertical-rl; transform:rotate(180deg)}
+
+  /* ---------- tiles ---------- */
+  .tile{
+    position:absolute;
+    background:var(--tile);
+    border:1px solid var(--tile-edge);
+    border-radius:2px;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:3%;
+    transition:left .16s ease, top .16s ease, width .16s ease, height .16s ease;
+  }
+  .tile svg{display:block;color:var(--glyph)}
+  .tile svg [fill]{fill:currentColor}
+  .t-meta{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:.35em;
+    text-align:center;
+    line-height:1.15;
+    padding:0 6%;
+    min-width:0;
+  }
+  .t-badge{
+    font-weight:700;
+    letter-spacing:.02em;
+    color:var(--on-accent);
+    background:var(--cyan);
+    padding:.22em .55em;
+    border-radius:2px;
+    white-space:nowrap;
+  }
+  .tile[data-r="3:4"] .t-badge{background:var(--kelp)}
+  .t-dims{
+    font-family:var(--mono);
+    font-variant-numeric:tabular-nums;
+    color:var(--tile-ink);
+    letter-spacing:-.01em;
+    white-space:nowrap;
+  }
+  .t-note{
+    font-size:.82em;
+    letter-spacing:.07em;
+    text-transform:uppercase;
+    color:var(--tile-ink-2);
+    white-space:nowrap;
+  }
+  .t-crop{
+    font-family:var(--mono);
+    font-variant-numeric:tabular-nums;
+    color:var(--tile-ink-2);
+    white-space:nowrap;
+  }
+
+  /* artwork in tiles */
+  .tile{cursor:pointer}
+  .t-img{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    display:block;
+    object-fit:cover;
+  }
+  .tile[data-fit="contain"] .t-img{object-fit:contain}
+  .tile[data-fit="fill"] .t-img{object-fit:fill}
+  /* Artwork runs to the tile edge: no hairline, and the image takes back the
+     2 px the border occupied. Outer tile dimensions are unchanged. */
+  .tile.has-art{border:0}
+  .t-meta{position:relative; z-index:2}
+  .t-meta.on-art{
+    background:rgba(7,18,22,.74);
+    padding:.5em .7em;
+    border-radius:2px;
+  }
+  .t-meta.on-art .t-dims{color:#F0F6F7}
+  .t-meta.on-art .t-note,
+  .t-meta.on-art .t-crop{color:#A8BFC6}
+  .tile.over{outline:2px solid var(--cyan); outline-offset:-2px}
+  .tile.over::after{
+    content:"";
+    position:absolute; inset:0; z-index:1;
+    background:var(--cyan);
+    opacity:.16;
+  }
+  .t-clear{
+    position:absolute; z-index:3;
+    top:5px; right:5px;
+    width:21px; height:21px;
+    padding:0; border:0; border-radius:2px;
+    background:rgba(7,18,22,.7);
+    color:#F0F6F7;
+    font:700 14px/1 var(--ui);
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    opacity:0;
+    transition:opacity .12s ease;
+  }
+  .tile:not(.has-art) .t-clear{display:none}
+  .tile.has-art:hover .t-clear,
+  .t-clear:focus-visible{opacity:1}
+  .t-clear:focus-visible{outline:2px solid var(--cyan); outline-offset:1px}
+  .stage.over{border-color:var(--cyan)}
+
+  /* segmented control */
+  .seg{
+    display:flex;
+    border:1px solid var(--line-strong);
+    border-radius:2px;
+    overflow:hidden;
+  }
+  .seg label{flex:1; position:relative; display:block}
+  .seg input{
+    position:absolute; inset:0;
+    opacity:0; width:100%; height:100%; margin:0;
+    cursor:pointer;
+  }
+  .seg span{
+    display:block; text-align:center;
+    font-size:12px; padding:7px 4px;
+    color:var(--ink-2); background:var(--field);
+    border-left:1px solid var(--line-strong);
+    user-select:none;
+  }
+  .seg label:first-child span{border-left:0}
+  .seg input:checked + span{background:var(--cyan); color:var(--on-accent); font-weight:700}
+  .seg input:focus-visible + span{outline:2px solid var(--cyan); outline-offset:-2px}
+  .mt{margin-top:14px}
+  .btnrow.tri .btn{padding:8px 4px; font-size:11.5px}
+
+  /* canvas colour */
+  .colorrow{display:flex; align-items:center; gap:10px}
+  input[type=color]{
+    width:46px; height:34px; flex:none;
+    padding:2px;
+    border:1px solid var(--line-strong);
+    border-radius:2px;
+    background:var(--field);
+    cursor:pointer;
+  }
+  input[type=color]:focus-visible{outline:2px solid var(--cyan); outline-offset:2px}
+  .hex{
+    flex:1; min-width:0;
+    font-family:var(--mono);
+    font-size:12.5px;
+    text-transform:uppercase;
+    color:var(--ink);
+    background:var(--field);
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:8px 9px;
+  }
+  .hex:focus-visible{outline:2px solid var(--cyan); outline-offset:1px; border-color:var(--cyan)}
+  .swatches{display:flex; flex-wrap:wrap; gap:7px; margin-top:11px}
+  .sw{
+    width:30px; height:26px;
+    padding:0;
+    border:1px solid var(--line-strong);
+    border-radius:2px;
+    cursor:pointer;
+  }
+  .sw.theme{
+    background:linear-gradient(135deg, var(--stage) 0 50%, var(--panel) 50% 100%);
+  }
+  .sw[aria-pressed="true"]{outline:2px solid var(--cyan); outline-offset:2px}
+  .sw:focus-visible{outline:2px solid var(--cyan); outline-offset:2px}
+
+  /* resize handle */
+  .handle{
+    position:absolute;
+    right:-9px; bottom:-9px;
+    width:19px; height:19px;
+    background:var(--panel);
+    border:1.5px solid var(--ink-2);
+    border-radius:2px;
+    cursor:nwse-resize;
+    touch-action:none;
+    padding:0;
+  }
+  .handle::after{
+    content:"";
+    position:absolute; inset:3px;
+    border-right:1.5px solid var(--ink-3);
+    border-bottom:1.5px solid var(--ink-3);
+  }
+  .handle:focus-visible{outline:2px solid var(--cyan); outline-offset:2px}
+  .handle:hover{border-color:var(--cyan)}
+
+  .stage-foot{
+    position:absolute;
+    left:14px; bottom:12px;
+    display:flex; align-items:center; gap:10px;
+    font-size:11.5px; color:var(--stage-ink, var(--ink-3));
+  }
+  .zoombtn{
+    font-family:var(--mono);
+    font-size:11px;
+    font-variant-numeric:tabular-nums;
+    color:var(--ink-2);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:3px 8px;
+    cursor:pointer;
+  }
+  .zoombtn:hover{border-color:var(--line-strong)}
+  .zoombtn:focus-visible{outline:2px solid var(--cyan); outline-offset:2px}
+
+  /* ---------- panel ---------- */
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:3px;
+    box-shadow:var(--shadow);
+  }
+  .sect{padding:16px 18px; border-bottom:1px solid var(--line)}
+  .sect:last-child{border-bottom:0}
+  .lab{
+    display:block;
+    font-size:10px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--ink-3);
+    margin-bottom:10px;
+  }
+  .row{display:flex; align-items:center; gap:12px}
+  input[type=range]{
+    flex:1; min-width:0; margin:0;
+    accent-color:var(--cyan);
+    height:22px;
+  }
+  input[type=range]:focus-visible{outline:2px solid var(--cyan); outline-offset:3px}
+  .num{
+    width:82px;
+    font-family:var(--mono);
+    font-size:13px;
+    font-variant-numeric:tabular-nums;
+    color:var(--ink);
+    background:var(--field);
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:6px 8px;
+    text-align:right;
+  }
+  .num:focus-visible{outline:2px solid var(--cyan); outline-offset:1px; border-color:var(--cyan)}
+  .hint{margin:9px 0 0; font-size:11.5px; color:var(--ink-3)}
+
+  .switch{
+    display:flex; align-items:center; gap:11px;
+    cursor:pointer; user-select:none;
+  }
+  .switch input{
+    appearance:none; -webkit-appearance:none;
+    margin:0; flex:none;
+    width:34px; height:19px;
+    border-radius:10px;
+    background:var(--line-strong);
+    border:1px solid transparent;
+    position:relative;
+    cursor:pointer;
+    transition:background .15s ease;
+  }
+  .switch input::after{
+    content:"";
+    position:absolute; top:2px; left:2px;
+    width:13px; height:13px; border-radius:50%;
+    background:var(--panel);
+    transition:transform .15s ease;
+  }
+  .switch input:checked{background:var(--cyan)}
+  .switch input:checked::after{transform:translateX(15px)}
+  .switch input:focus-visible{outline:2px solid var(--cyan); outline-offset:2px}
+  .switch .stxt{font-size:13px}
+
+  .checks{display:flex; flex-direction:column; gap:11px}
+  .check{display:flex; align-items:center; gap:10px; cursor:pointer; font-size:13px}
+  .check input{
+    appearance:none; -webkit-appearance:none;
+    margin:0; width:15px; height:15px;
+    border:1px solid var(--line-strong);
+    border-radius:2px; background:var(--field);
+    position:relative; cursor:pointer;
+  }
+  .check input:checked{background:var(--cyan); border-color:var(--cyan)}
+  .check input:checked::after{
+    content:""; position:absolute;
+    left:4px; top:1px; width:4px; height:8px;
+    border:solid var(--on-accent);
+    border-width:0 1.6px 1.6px 0;
+    transform:rotate(43deg);
+  }
+  .check input:focus-visible{outline:2px solid var(--cyan); outline-offset:2px}
+
+  /* spec readout */
+  .spec{display:flex; flex-direction:column}
+  .sline{
+    display:flex; align-items:baseline; justify-content:space-between;
+    gap:12px; padding:6px 0;
+    border-bottom:1px dotted var(--line);
+    font-size:12.5px;
+  }
+  .sline:last-of-type{border-bottom:0}
+  .sline .k{color:var(--ink-2)}
+  .sline .v{
+    font-family:var(--mono);
+    font-variant-numeric:tabular-nums;
+    letter-spacing:-.01em;
+    white-space:nowrap;
+  }
+  table.tiles{
+    width:100%;
+    border-collapse:collapse;
+    font-size:12.5px;
+  }
+  table.tiles th{
+    text-align:left;
+    font-size:10px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--ink-3); font-weight:400;
+    padding:0 0 7px; border-bottom:1px solid var(--line);
+  }
+  table.tiles th:last-child,table.tiles td:last-child{text-align:right}
+  table.tiles td{
+    padding:7px 0;
+    border-bottom:1px dotted var(--line);
+    font-family:var(--mono);
+    font-variant-numeric:tabular-nums;
+    letter-spacing:-.01em;
+  }
+  table.tiles tr:last-child td{border-bottom:0}
+  .pill{
+    font-family:var(--ui);
+    font-size:10.5px; font-weight:700;
+    color:var(--on-accent); background:var(--cyan);
+    padding:.16em .45em; border-radius:2px;
+  }
+  .pill.p34{background:var(--kelp)}
+  .tnote{
+    display:block;
+    font-family:var(--ui);
+    font-size:10px; letter-spacing:.07em; text-transform:uppercase;
+    color:var(--ink-3);
+  }
+  .note{
+    margin:12px 0 0;
+    padding:9px 11px;
+    background:var(--amber-bg);
+    border-left:2px solid var(--amber);
+    color:var(--amber);
+    font-size:11.5px;
+    line-height:1.4;
+  }
+  .foot{
+    margin:10px 0 0;
+    font-size:11.5px;
+    color:var(--ink-3);
+    line-height:1.45;
+  }
+  .btn{
+    width:100%;
+    font-family:var(--ui);
+    font-size:12.5px;
+    color:var(--ink);
+    background:var(--field);
+    border:1px solid var(--line-strong);
+    border-radius:2px;
+    padding:9px 12px;
+    cursor:pointer;
+  }
+  .btn:hover{border-color:var(--cyan); color:var(--cyan)}
+  .btn:focus-visible{outline:2px solid var(--cyan); outline-offset:2px}
+  .btnrow{display:flex; gap:9px}
+
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important}
+  }
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <div>
+      <h1>Mosaic Grid Scaler</h1>
+      <p class="sub">Seven tiles on two exact aspect ratios &mdash; 16:9 landscape and 3:4 portrait &mdash; separated by a single uniform gutter. Scale it from the corner, and drop artwork into any tile to see what the crop costs.</p>
+    </div>
+    <div class="ratiochip">
+      <span class="k">Mosaic ratio</span>
+      <span class="v" id="ratioOut">1 : 1.688</span>
+    </div>
+  </header>
+
+  <div class="cols">
+    <section class="stage" id="stage">
+      <div class="stage-inner">
+        <div class="frame">
+          <div class="dim dim-t"><span id="dimW">960.0 px</span></div>
+          <div class="dim dim-l"><span id="dimH">1620.7 px</span></div>
+          <div class="mosaic" id="mosaic"></div>
+          <button class="handle" id="handle" aria-label="Resize mosaic. Arrow keys adjust size; hold Shift for larger steps."></button>
+        </div>
+      </div>
+      <div class="stage-foot">
+        <button class="zoombtn" id="zoomBtn" title="Return to fit">Fit &middot; 42%</button>
+        <span id="stageHint">Drag the corner to scale &middot; drop artwork on a tile</span>
+      </div>
+    </section>
+    <input type="file" id="filePick" accept="image/*" multiple hidden>
+
+    <aside class="panel">
+      <div class="sect">
+        <label class="lab" for="widthRange">Mosaic width</label>
+        <div class="row">
+          <input type="range" id="widthRange" min="320" max="2400" step="1" value="960" aria-label="Mosaic width in pixels">
+          <input type="number" class="num" id="widthNum" min="320" max="2400" step="1" value="960" aria-label="Mosaic width in pixels">
+        </div>
+        <p class="hint">Drag the bottom edge of the canvas down to give the mosaic more room.</p>
+      </div>
+
+      <div class="sect">
+        <label class="lab" for="gutterRange">Gutter</label>
+        <div class="row">
+          <input type="range" id="gutterRange" min="0" max="48" step="0.5" value="12" aria-label="Gutter in pixels">
+          <input type="number" class="num" id="gutterNum" min="0" max="48" step="0.5" value="12" aria-label="Gutter in pixels">
+        </div>
+        <p class="hint">One value for every gap, horizontal and vertical.</p>
+      </div>
+
+      <div class="sect">
+        <label class="lab" for="radiusRange">Tile corner radius</label>
+        <div class="row">
+          <input type="range" id="radiusRange" min="0" max="64" step="0.5" value="2" aria-label="Tile corner radius in pixels">
+          <input type="number" class="num" id="radiusNum" min="0" max="64" step="0.5" value="2" aria-label="Tile corner radius in pixels">
+        </div>
+        <p class="hint" id="radiusHint">Same radius on every tile, in mosaic pixels.</p>
+      </div>
+
+      <div class="sect">
+        <label class="switch" for="lockToggle">
+          <input type="checkbox" id="lockToggle" checked>
+          <span class="stxt">Constrain aspect ratio</span>
+        </label>
+        <p class="hint" id="lockHint">Gutters scale with the mosaic, so 1&nbsp;:&nbsp;1.688 holds at every size.</p>
+      </div>
+
+      <div class="sect">
+        <label class="switch" for="overlayToggle">
+          <input type="checkbox" id="overlayToggle" checked>
+          <span class="stxt">Show tile overlay</span>
+        </label>
+        <div class="checks mt">
+          <label class="check" for="dimsToggle"><input type="checkbox" id="dimsToggle" checked> Pixel dimensions</label>
+          <label class="check" for="artToggle"><input type="checkbox" id="artToggle" checked> Placeholder art</label>
+        </div>
+        <p class="hint">Press <strong>O</strong> to clear the overlay off the artwork and put it back.</p>
+      </div>
+
+      <div class="sect">
+        <span class="lab">Artwork fit</span>
+        <div class="seg" role="radiogroup" aria-label="How artwork fills its tile">
+          <label><input type="radio" name="fit" id="fitCover" value="cover" checked><span>Cover</span></label>
+          <label><input type="radio" name="fit" id="fitContain" value="contain"><span>Contain</span></label>
+          <label><input type="radio" name="fit" id="fitFill" value="fill"><span>Fill</span></label>
+        </div>
+        <p class="hint">Drop an image on a tile, or anywhere else on the mosaic to fill all seven. Click a tile to browse.</p>
+
+        <span class="lab mt">Load test cards</span>
+        <div class="btnrow tri">
+          <button class="btn" id="cardMatched">Matched</button>
+          <button class="btn" id="card169">All 16:9</button>
+          <button class="btn" id="card34">All 3:4</button>
+        </div>
+        <p class="hint" id="cropSummary">No artwork loaded.</p>
+        <button class="btn mt" id="clearArt">Clear artwork</button>
+      </div>
+
+      <div class="sect">
+        <span class="lab">Canvas background</span>
+        <div class="colorrow">
+          <input type="color" id="bgColor" value="#0B1416" aria-label="Pick a canvas background colour">
+          <input type="text" class="hex" id="bgHex" value="Theme default" spellcheck="false" aria-label="Background colour, as a hex value">
+        </div>
+        <div class="swatches" id="swatches"></div>
+        <p class="hint">Sets the ground behind the tiles, so the gutters read in the colour your artwork will actually sit on.</p>
+      </div>
+
+      <div class="sect">
+        <span class="lab">Measured spec</span>
+        <div class="spec">
+          <div class="sline"><span class="k">Mosaic</span><span class="v" id="sMosaic">—</span></div>
+          <div class="sline"><span class="k">Gutter</span><span class="v" id="sGutter">—</span></div>
+          <div class="sline"><span class="k">Corner radius</span><span class="v" id="sRadius">—</span></div>
+          <div class="sline"><span class="k">Upper band &mdash; columns</span><span class="v" id="sBandA">—</span></div>
+          <div class="sline"><span class="k">Upper band &mdash; height</span><span class="v" id="sBandAH">—</span></div>
+          <div class="sline"><span class="k">Lower band &mdash; columns</span><span class="v" id="sBandB">—</span></div>
+          <div class="sline"><span class="k">Lower band &mdash; row height</span><span class="v" id="sBandBH">—</span></div>
+        </div>
+      </div>
+
+      <div class="sect">
+        <span class="lab">Tile sizes</span>
+        <table class="tiles">
+          <thead><tr><th>Ratio</th><th>Width &times; height</th><th>Qty</th></tr></thead>
+          <tbody id="tileRows"></tbody>
+        </table>
+        <div id="warnSlot"></div>
+        <p class="foot">The two bands carry different column splits by necessity: a 16:9 tile and a 3:4 tile sharing a row height cannot use the same widths as two stacked 3:4 tiles beside a full-height 3:4 tile. Holding every ratio exact is what breaks the vertical alignment between bands.</p>
+      </div>
+
+      <div class="sect">
+        <div class="btnrow">
+          <button class="btn" id="copyBtn">Copy spec</button>
+          <button class="btn" id="resetBtn">Reset</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var MIN_W = 320, MAX_W = 2400, MIN_G = 0, MAX_G = 48, MIN_R = 0, MAX_R = 64;
+  var LEGIBLE_MIN = 120; // px: smallest tile width worth shipping in a streaming grid
+
+  // dH/dg for the composed mosaic, used when dragging vertically with the ratio unlocked
+  var DH_DG = -5/9 + 2 + (-72/91);
+
+  var S = {
+    W: 960,
+    g: 12,
+    gRatio: 12/960,
+    r: 2,
+    locked: true,
+    dims: true,
+    art: true,
+    overlay: true,
+    bg: null,
+    fit: 'cover',
+    images: [null, null, null, null, null, null, null],
+    zoomFrozen: null
+  };
+
+  var el = {
+    stage: document.getElementById('stage'),
+    mosaic: document.getElementById('mosaic'),
+    handle: document.getElementById('handle'),
+    dimW: document.getElementById('dimW'),
+    dimH: document.getElementById('dimH'),
+    ratioOut: document.getElementById('ratioOut'),
+    zoomBtn: document.getElementById('zoomBtn'),
+    stageHint: document.getElementById('stageHint'),
+    widthRange: document.getElementById('widthRange'),
+    widthNum: document.getElementById('widthNum'),
+    gutterRange: document.getElementById('gutterRange'),
+    gutterNum: document.getElementById('gutterNum'),
+    radiusRange: document.getElementById('radiusRange'),
+    radiusNum: document.getElementById('radiusNum'),
+    radiusHint: document.getElementById('radiusHint'),
+    lockToggle: document.getElementById('lockToggle'),
+    lockHint: document.getElementById('lockHint'),
+    dimsToggle: document.getElementById('dimsToggle'),
+    artToggle: document.getElementById('artToggle'),
+    sMosaic: document.getElementById('sMosaic'),
+    sGutter: document.getElementById('sGutter'),
+    sRadius: document.getElementById('sRadius'),
+    sBandA: document.getElementById('sBandA'),
+    sBandAH: document.getElementById('sBandAH'),
+    sBandB: document.getElementById('sBandB'),
+    sBandBH: document.getElementById('sBandBH'),
+    tileRows: document.getElementById('tileRows'),
+    warnSlot: document.getElementById('warnSlot'),
+    copyBtn: document.getElementById('copyBtn'),
+    resetBtn: document.getElementById('resetBtn'),
+    filePick: document.getElementById('filePick'),
+    cropSummary: document.getElementById('cropSummary'),
+    clearArt: document.getElementById('clearArt'),
+    cardMatched: document.getElementById('cardMatched'),
+    card169: document.getElementById('card169'),
+    card34: document.getElementById('card34'),
+    overlayToggle: document.getElementById('overlayToggle'),
+    bgColor: document.getElementById('bgColor'),
+    bgHex: document.getElementById('bgHex'),
+    swatches: document.getElementById('swatches')
+  };
+
+  function f1(n){ return n.toFixed(1); }
+  function clamp(v, lo, hi){ return v < lo ? lo : (v > hi ? hi : v); }
+
+  /* ---- geometry -------------------------------------------------------
+     Upper band: narrow column a holds two stacked 3:4 tiles; wide column b
+     holds one 3:4 tile the full band height.
+        8a/3 + g = 4b/3   and   a + g + b = W
+     Lower band: each row is a 16:9 tile beside a 3:4 tile of equal height.
+        9c/16 = 4d/3      and   c + g + d = W
+  --------------------------------------------------------------------- */
+  function geom(W, g){
+    var a  = (W - 1.75*g) / 3;
+    var b  = W - g - a;
+    var HA = 4*b/3;
+    var c  = 64*(W - g) / 91;
+    var d  = W - g - c;
+    var Hr = 9*c/16;
+    var H  = HA + 2*g + 2*Hr;
+
+    var ha = 4*a/3;
+    var y0 = HA + g;
+    var y1 = y0 + Hr + g;
+
+    var tiles = [
+      {x:0,     y:0,        w:a, h:ha, r:'3:4'},
+      {x:0,     y:ha + g,   w:a, h:ha, r:'3:4'},
+      {x:a + g, y:0,        w:b, h:HA, r:'3:4', note:'tall · spans 2 rows'},
+      {x:0,     y:y0,       w:c, h:Hr, r:'16:9'},
+      {x:c + g, y:y0,       w:d, h:Hr, r:'3:4'},
+      {x:0,     y:y1,       w:c, h:Hr, r:'16:9'},
+      {x:c + g, y:y1,       w:d, h:Hr, r:'3:4'}
+    ];
+    return {a:a, b:b, HA:HA, c:c, d:d, Hr:Hr, H:H, tiles:tiles};
+  }
+
+  var inner = el.stage.firstElementChild;
+
+  // Resting size leaves headroom so a drag has somewhere to grow into;
+  // margin 1 is the hard ceiling at which the mosaic exactly fills the canvas.
+  var REST_MARGIN = 0.9;
+  function fitZoom(G, margin){
+    var cs = getComputedStyle(inner);
+    var availW = el.stage.clientWidth  - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    var availH = el.stage.clientHeight - parseFloat(cs.paddingTop)  - parseFloat(cs.paddingBottom);
+    if (!(availW > 0) || !(availH > 0)) return 0.4;
+    var m = margin === undefined ? REST_MARGIN : margin;
+    return clamp(Math.min(availW / S.W, availH / G.H) * m, 0.03, 1);
+  }
+
+  var GLYPH = '<svg viewBox="0 0 64 42" aria-hidden="true">'
+    + '<circle cx="45" cy="13" r="7.5" fill="currentColor"></circle>'
+    + '<polygon points="3,37 21,12 39,37" fill="currentColor"></polygon>'
+    + '<polygon points="29,37 42,19 58,37" fill="currentColor"></polygon>'
+    + '</svg>';
+
+  /* ---- artwork ---------------------------------------------------- */
+
+  // How much of the image is lost (cover) or left empty (contain) in this tile.
+  function fitInfo(im, tw, th){
+    var ra = im.w / im.h, rt = tw / th;
+    if (S.fit === 'fill'){
+      var k = ra / rt;
+      if (Math.abs(k - 1) < 0.005) return {label:'no distortion', pct:0};
+      return k > 1
+        ? {label:'squeezed ' + k.toFixed(2) + '× horizontally', pct:Math.abs(k - 1) * 100}
+        : {label:'stretched ' + (1/k).toFixed(2) + '× horizontally', pct:Math.abs(1/k - 1) * 100};
+    }
+    if (Math.abs(ra - rt) < 0.0008) return {label:'exact fit', pct:0};
+    var wider = ra > rt;
+    var pct = wider ? (1 - rt/ra) * 100 : (1 - ra/rt) * 100;
+    return S.fit === 'cover'
+      ? {label: pct.toFixed(1) + '% of ' + (wider ? 'width' : 'height') + ' cropped', pct:pct, axis:(wider?'width':'height')}
+      : {label: pct.toFixed(1) + '% ' + (wider ? 'height' : 'width') + ' letterboxed', pct:pct, axis:(wider?'height':'width')};
+  }
+
+  // Procedural test card: thirds, an 80% safe box, corner brackets, centre mark.
+  var HUES = [
+    {a:'#0C4F63', b:'#16A2AE'},
+    {a:'#1B5942', b:'#4FA179'},
+    {a:'#7E5410', b:'#D7A04C'},
+    {a:'#123A52', b:'#2F80A6'}
+  ];
+  var cardCache = {};
+  function testCard(w, h, hue, ratioLabel){
+    var key = w + 'x' + h + '.' + hue;
+    if (cardCache[key]) return cardCache[key];
+    var c = HUES[hue % HUES.length];
+    var m = Math.min(w, h);
+    var s = m * 0.004;
+    var br = m * 0.07, bi = m * 0.035;
+    function bracket(x, y, sx, sy){
+      return '<path d="M' + (x + sx*br) + ' ' + y + ' H' + x + ' V' + (y + sy*br) + '" />';
+    }
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">'
+      + '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">'
+      + '<stop offset="0" stop-color="' + c.a + '"/><stop offset="1" stop-color="' + c.b + '"/></linearGradient></defs>'
+      + '<rect width="' + w + '" height="' + h + '" fill="' + c.a + '"/>'
+      + '<rect width="' + w + '" height="' + h + '" fill="url(#g)"/>'
+      + '<g stroke="#ffffff" stroke-opacity=".22" stroke-width="' + s + '" fill="none">'
+      +   '<path d="M' + (w/3) + ' 0 V' + h + ' M' + (2*w/3) + ' 0 V' + h + '"/>'
+      +   '<path d="M0 ' + (h/3) + ' H' + w + ' M0 ' + (2*h/3) + ' H' + w + '"/>'
+      + '</g>'
+      + '<rect x="' + (w*0.1) + '" y="' + (h*0.1) + '" width="' + (w*0.8) + '" height="' + (h*0.8) + '" fill="none" '
+      +   'stroke="#ffffff" stroke-opacity=".62" stroke-width="' + (s*1.6) + '" stroke-dasharray="' + (s*7) + ' ' + (s*6) + '"/>'
+      + '<g stroke="#ffffff" stroke-opacity=".85" stroke-width="' + (s*2.2) + '" fill="none" stroke-linecap="square">'
+      +   bracket(bi, bi, 1, 1) + bracket(w-bi, bi, -1, 1)
+      +   bracket(bi, h-bi, 1, -1) + bracket(w-bi, h-bi, -1, -1)
+      + '</g>'
+      + '<circle cx="' + (w/2) + '" cy="' + (h/2) + '" r="' + (m*0.055) + '" fill="none" stroke="#ffffff" stroke-opacity=".8" stroke-width="' + (s*1.6) + '"/>'
+      + '<path d="M' + (w/2 - m*0.09) + ' ' + (h/2) + ' H' + (w/2 + m*0.09) + ' M' + (w/2) + ' ' + (h/2 - m*0.09) + ' V' + (h/2 + m*0.09) + '" '
+      +   'stroke="#ffffff" stroke-opacity=".8" stroke-width="' + (s*1.6) + '"/>'
+      + '<text x="' + (w*0.1 + m*0.035) + '" y="' + (h*0.1 + m*0.115) + '" fill="#ffffff" fill-opacity=".95" '
+      +   'font-family="Helvetica,Arial,sans-serif" font-weight="700" font-size="' + (m*0.075) + '">' + ratioLabel + '</text>'
+      + '<text x="' + (w*0.1 + m*0.035) + '" y="' + (h*0.1 + m*0.175) + '" fill="#ffffff" fill-opacity=".72" '
+      +   'font-family="Helvetica,Arial,sans-serif" font-size="' + (m*0.034) + '" letter-spacing="' + (m*0.005) + '">'
+      +   w + ' × ' + h + '  ·  SAFE 80%</text>'
+      + '</svg>';
+    var out = {src:'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg), w:w, h:h, label:ratioLabel + ' test card'};
+    cardCache[key] = out;
+    return out;
+  }
+  function card169(i){ return testCard(1600, 900, i, '16:9'); }
+  function card34(i){ return testCard(1200, 1600, i, '3:4'); }
+
+  function readFile(file){
+    return new Promise(function(res, rej){
+      var fr = new FileReader();
+      fr.onload = function(){
+        var img = new Image();
+        img.onload = function(){ res({src:fr.result, w:img.naturalWidth, h:img.naturalHeight, label:file.name}); };
+        img.onerror = function(){ rej(new Error('decode')); };
+        img.src = fr.result;
+      };
+      fr.onerror = function(){ rej(new Error('read')); };
+      fr.readAsDataURL(file);
+    });
+  }
+
+  var hintTimer = null;
+  function flash(msg){
+    el.stageHint.textContent = msg;
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(function(){
+      el.stageHint.textContent = 'Drag the corner to scale · drop artwork on a tile';
+    }, 2400);
+  }
+
+  function acceptFiles(files, start){
+    var list = Array.prototype.filter.call(files || [], function(f){ return /^image\//.test(f.type); });
+    if (!list.length){ flash('That file isn’t an image — try PNG, JPG, WebP or SVG.'); return; }
+    Promise.all(list.map(readFile)).then(function(imgs){
+      if (start === 'all'){
+        for (var i = 0; i < 7; i++) S.images[i] = imgs[i % imgs.length];
+      } else {
+        for (var j = 0; j < imgs.length && start + j < 7; j++) S.images[start + j] = imgs[j];
+      }
+      render();
+      flash(imgs.length + (imgs.length === 1 ? ' image loaded' : ' images loaded'));
+    }, function(){
+      flash('Couldn’t read that image.');
+    });
+  }
+
+  var pickTarget = 0;
+  function browseFor(i){ pickTarget = i; el.filePick.value = ''; el.filePick.click(); }
+  el.filePick.addEventListener('change', function(){
+    if (el.filePick.files && el.filePick.files.length) acceptFiles(el.filePick.files, pickTarget);
+  });
+
+  /* ---- tile nodes ---- */
+  var nodes = [];
+  (function build(){
+    for (var i = 0; i < 7; i++) nodes.push(makeTile(i));
+  })();
+
+  function makeTile(i){
+    var t = document.createElement('div');
+    t.className = 'tile';
+    t.title = 'Click to load artwork, or drop an image here';
+    t.innerHTML = '<img class="t-img" alt="" hidden>'
+      + GLYPH
+      + '<div class="t-meta">'
+      +   '<span class="t-badge"></span>'
+      +   '<span class="t-dims"></span>'
+      +   '<span class="t-crop"></span>'
+      +   '<span class="t-note"></span>'
+      + '</div>'
+      + '<button class="t-clear" type="button" aria-label="Remove artwork from this tile">×</button>';
+    el.mosaic.appendChild(t);
+
+    t.addEventListener('dragenter', function(e){ e.preventDefault(); e.stopPropagation(); t.classList.add('over'); });
+    t.addEventListener('dragover', function(e){
+      e.preventDefault(); e.stopPropagation();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      t.classList.add('over');
+    });
+    t.addEventListener('dragleave', function(e){ e.stopPropagation(); t.classList.remove('over'); });
+    t.addEventListener('drop', function(e){
+      e.preventDefault(); e.stopPropagation();
+      t.classList.remove('over');
+      acceptFiles(e.dataTransfer && e.dataTransfer.files, i);
+    });
+    t.addEventListener('click', function(e){
+      if (e.target.closest('.t-clear')) return;
+      browseFor(i);
+    });
+
+    var clear = t.querySelector('.t-clear');
+    clear.addEventListener('click', function(e){
+      e.stopPropagation();
+      S.images[i] = null;
+      render();
+    });
+
+    return {
+      root: t,
+      img: t.querySelector('.t-img'),
+      svg: t.querySelector('svg'),
+      meta: t.querySelector('.t-meta'),
+      badge: t.querySelector('.t-badge'),
+      dims: t.querySelector('.t-dims'),
+      crop: t.querySelector('.t-crop'),
+      note: t.querySelector('.t-note')
+    };
+  }
+
+  function render(){
+    var G = geom(S.W, S.g);
+    // A frozen zoom never exceeds the canvas, so the mosaic stays whole at any size.
+    var z = S.zoomFrozen !== null ? Math.min(S.zoomFrozen, fitZoom(G, 1)) : fitZoom(G);
+
+    el.mosaic.style.width  = (S.W * z) + 'px';
+    el.mosaic.style.height = (G.H  * z) + 'px';
+
+    var worst = null;
+    var rClamped = false;
+    for (var i = 0; i < 7; i++){
+      var t = G.tiles[i], n = nodes[i];
+      var dw = t.w * z, dh = t.h * z;
+      var im = S.images[i];
+
+      n.root.style.left   = (t.x * z) + 'px';
+      n.root.style.top    = (t.y * z) + 'px';
+      n.root.style.width  = dw + 'px';
+      n.root.style.height = dh + 'px';
+
+      // Radius is authored in mosaic pixels, so it is drawn at the current
+      // zoom and capped at a pill on whichever tile is smallest.
+      var rr = Math.min(S.r, Math.min(t.w, t.h) / 2);
+      if (rr < S.r - 0.001) rClamped = true;
+      n.root.style.borderRadius = (rr * z) + 'px';
+
+      n.root.setAttribute('data-r', t.r);
+      n.root.setAttribute('data-fit', S.fit);
+      n.root.classList.toggle('has-art', !!im);
+
+      if (im){
+        if (n.img.getAttribute('src') !== im.src) n.img.setAttribute('src', im.src);
+        n.img.hidden = false;
+      } else {
+        n.img.hidden = true;
+        n.img.removeAttribute('src');
+      }
+
+      var showGlyph = S.art && !im && dw >= 58 && dh >= 66;
+      var showBadge = dw >= 42 && dh >= 26;
+      var showDims = S.dims && dw >= 78 && dh >= 46;
+      var showNote = !!t.note && !im && dw >= 150 && dh >= 130;
+
+      // SVG elements have no `hidden` IDL property, so set the attribute directly.
+      if (showGlyph) n.svg.removeAttribute('hidden');
+      else n.svg.setAttribute('hidden', '');
+      if (showGlyph){
+        var gw = clamp(dw * 0.36, 26, 132);
+        n.svg.style.width = gw + 'px';
+        n.svg.style.height = (gw * 42/64) + 'px';
+      }
+
+      var info = im ? fitInfo(im, t.w, t.h) : null;
+      if (info && info.pct > 0 && (!worst || info.pct > worst.pct)){
+        worst = {pct:info.pct, im:im, r:t.r, label:info.label};
+      }
+      var showCrop = !!info && dw >= 96 && dh >= 62;
+
+      n.meta.hidden = !S.overlay || !(showBadge || showDims || showCrop);
+      n.meta.classList.toggle('on-art', !!im);
+      n.badge.hidden = !showBadge;
+      n.dims.hidden = !showDims;
+      n.crop.hidden = !showCrop;
+      n.note.hidden = !showNote;
+
+      n.badge.textContent = t.r;
+      n.badge.style.fontSize = clamp(dw * 0.046, 9, 15) + 'px';
+      n.dims.textContent = f1(t.w) + ' × ' + f1(t.h);
+      n.dims.style.fontSize = clamp(dw * 0.038, 8, 13) + 'px';
+      if (info) n.crop.textContent = info.label;
+      n.crop.style.fontSize = clamp(dw * 0.032, 7.5, 11) + 'px';
+      if (t.note) n.note.textContent = t.note;
+      n.note.style.fontSize = clamp(dw * 0.030, 8, 10.5) + 'px';
+    }
+
+    var loaded = S.images.filter(Boolean).length;
+    if (!loaded){
+      el.cropSummary.textContent = 'No artwork loaded.';
+    } else if (!worst){
+      el.cropSummary.textContent = S.fit === 'fill'
+        ? 'Every image matches its tile — no distortion.'
+        : 'Every image matches its tile exactly.';
+    } else {
+      el.cropSummary.textContent = 'Worst case: ' + worst.im.w + '×' + worst.im.h
+        + ' art in a ' + worst.r + ' tile — ' + worst.label + '.';
+    }
+
+    // dimension lines + ratio
+    el.dimW.textContent = f1(S.W) + ' px';
+    el.dimH.textContent = f1(G.H) + ' px';
+    el.ratioOut.textContent = '1 : ' + (G.H / S.W).toFixed(3);
+
+    // zoom readout
+    el.zoomBtn.textContent = S.zoomFrozen !== null
+      ? Math.round(z * 100) + '% · refit'
+      : 'Fit · ' + Math.round(z * 100) + '%';
+
+    // spec panel
+    el.sMosaic.textContent  = f1(S.W) + ' × ' + f1(G.H);
+    el.sGutter.textContent  = f1(S.g) + ' px';
+    el.sRadius.textContent  = f1(S.r) + ' px';
+    el.sBandA.textContent   = f1(G.a) + ' | ' + f1(G.b);
+    el.sBandAH.textContent  = f1(G.HA);
+    el.sBandB.textContent   = f1(G.c) + ' | ' + f1(G.d);
+    el.sBandBH.textContent  = f1(G.Hr);
+
+    var rows = [
+      {r:'3:4',  w:G.a, h:4*G.a/3, q:2, note:''},
+      {r:'3:4',  w:G.b, h:G.HA,    q:1, note:'tall'},
+      {r:'16:9', w:G.c, h:G.Hr,    q:2, note:''},
+      {r:'3:4',  w:G.d, h:G.Hr,    q:2, note:''}
+    ];
+    var html = '';
+    for (var j = 0; j < rows.length; j++){
+      var R = rows[j];
+      html += '<tr><td><span class="pill' + (R.r === '3:4' ? ' p34' : '') + '">' + R.r + '</span>'
+            + (R.note ? '<span class="tnote">' + R.note + '</span>' : '')
+            + '</td><td>' + f1(R.w) + ' × ' + f1(R.h) + '</td><td>' + R.q + '</td></tr>';
+    }
+    el.tileRows.innerHTML = html;
+
+    var minW = Math.min(G.a, G.d);
+    el.warnSlot.innerHTML = minW < LEGIBLE_MIN
+      ? '<p class="note">Narrowest tile is ' + f1(minW) + ' px wide &mdash; under the ' + LEGIBLE_MIN
+        + ' px floor where artwork and titles stop reading on a 10-foot screen.</p>'
+      : '';
+
+    // keep inputs in step
+    if (document.activeElement !== el.widthNum)  el.widthNum.value  = Math.round(S.W);
+    if (document.activeElement !== el.widthRange) el.widthRange.value = Math.round(S.W);
+    if (document.activeElement !== el.gutterNum) el.gutterNum.value = Math.round(S.g * 2) / 2;
+    if (document.activeElement !== el.gutterRange) el.gutterRange.value = Math.round(S.g * 2) / 2;
+    if (document.activeElement !== el.radiusNum) el.radiusNum.value = Math.round(S.r * 2) / 2;
+    if (document.activeElement !== el.radiusRange) el.radiusRange.value = Math.round(S.r * 2) / 2;
+
+    el.radiusHint.textContent = rClamped
+      ? 'Capped at ' + f1(Math.min(G.a, G.d, G.Hr) / 2) + ' px — half the shortest tile edge.'
+      : (S.r === 0 ? 'Square corners.' : 'Same radius on every tile, in mosaic pixels.');
+
+    el.lockHint.innerHTML = S.locked
+      ? 'Gutters scale with the mosaic, so 1&nbsp;:&nbsp;' + (G.H / S.W).toFixed(3) + ' holds at every size.'
+      : 'Gutter stays fixed at ' + f1(S.g) + '&nbsp;px, so the ratio drifts as the mosaic grows.';
+  }
+
+  function setW(w){
+    S.W = clamp(w, MIN_W, MAX_W);
+    if (S.locked) S.g = clamp(S.gRatio * S.W, MIN_G, MAX_G);
+    render();
+  }
+  function setG(g){
+    S.g = clamp(g, MIN_G, Math.min(MAX_G, S.W / 6));
+    S.gRatio = S.g / S.W;
+    render();
+  }
+
+  function setR(r){
+    S.r = clamp(r, MIN_R, MAX_R);
+    render();
+  }
+
+  function freeze(){
+    if (S.zoomFrozen === null){
+      S.zoomFrozen = fitZoom(geom(S.W, S.g));
+      el.mosaic.classList.add('dragging');
+    }
+  }
+  function thaw(){
+    S.zoomFrozen = null;
+    el.mosaic.classList.remove('dragging');
+    render();
+  }
+
+  /* ---- corner drag ---- */
+  var drag = null;
+  el.handle.addEventListener('pointerdown', function(e){
+    e.preventDefault();
+    freeze();
+    var G = geom(S.W, S.g);
+    var R = G.H / S.W;
+    drag = {x:e.clientX, y:e.clientY, W:S.W, g:S.g, z:S.zoomFrozen, R:R};
+    el.handle.setPointerCapture(e.pointerId);
+    el.stageHint.textContent = S.locked ? 'Scaling on locked ratio' : 'Width ↔  ·  gutter ↕';
+  });
+  el.handle.addEventListener('pointermove', function(e){
+    if (!drag) return;
+    var dx = (e.clientX - drag.x) / drag.z;
+    var dy = (e.clientY - drag.y) / drag.z;
+    if (S.locked){
+      var R = drag.R;
+      var dW = (dx + dy * R) / (1 + R * R);
+      setW(drag.W + dW);
+    } else {
+      S.W = clamp(drag.W + dx, MIN_W, MAX_W);
+      setG(drag.g + dy / DH_DG);
+    }
+  });
+  function endDrag(e){
+    if (!drag) return;
+    drag = null;
+    try { el.handle.releasePointerCapture(e.pointerId); } catch(err){}
+    el.stageHint.textContent = 'Drag the corner to scale';
+    thaw();
+  }
+  el.handle.addEventListener('pointerup', endDrag);
+  el.handle.addEventListener('pointercancel', endDrag);
+
+  el.handle.addEventListener('keydown', function(e){
+    var step = e.shiftKey ? 40 : 8;
+    var k = e.key;
+    if (k === 'ArrowRight' || k === 'ArrowUp'){ setW(S.W + step); e.preventDefault(); }
+    else if (k === 'ArrowLeft' || k === 'ArrowDown'){ setW(S.W - step); e.preventDefault(); }
+  });
+
+  /* ---- controls ---- */
+  function wireRange(range, num, apply){
+    range.addEventListener('pointerdown', freeze);
+    range.addEventListener('input', function(){ apply(parseFloat(range.value)); });
+    range.addEventListener('keydown', freeze);
+    ['pointerup','pointercancel','keyup','blur'].forEach(function(ev){
+      range.addEventListener(ev, thaw);
+    });
+    num.addEventListener('change', function(){
+      var v = parseFloat(num.value);
+      if (!isNaN(v)) apply(v);
+      else render();
+    });
+  }
+  wireRange(el.widthRange, el.widthNum, setW);
+  wireRange(el.gutterRange, el.gutterNum, setG);
+  wireRange(el.radiusRange, el.radiusNum, setR);
+
+  el.lockToggle.addEventListener('change', function(){
+    S.locked = el.lockToggle.checked;
+    if (S.locked) S.gRatio = S.g / S.W;
+    render();
+  });
+  el.dimsToggle.addEventListener('change', function(){ S.dims = el.dimsToggle.checked; render(); });
+  el.artToggle.addEventListener('change', function(){ S.art = el.artToggle.checked; render(); });
+  el.zoomBtn.addEventListener('click', thaw);
+
+  /* ---- artwork controls ---- */
+  ['fitCover','fitContain','fitFill'].forEach(function(id){
+    document.getElementById(id).addEventListener('change', function(e){
+      if (e.target.checked){ S.fit = e.target.value; render(); }
+    });
+  });
+
+  el.cardMatched.addEventListener('click', function(){
+    var G = geom(S.W, S.g);
+    for (var i = 0; i < 7; i++){
+      S.images[i] = G.tiles[i].r === '16:9' ? card169(i) : card34(i);
+    }
+    render();
+    flash('Test cards loaded, matched to each tile');
+  });
+  el.card169.addEventListener('click', function(){
+    for (var i = 0; i < 7; i++) S.images[i] = card169(i);
+    render();
+    flash('16:9 test card in every tile');
+  });
+  el.card34.addEventListener('click', function(){
+    for (var i = 0; i < 7; i++) S.images[i] = card34(i);
+    render();
+    flash('3:4 test card in every tile');
+  });
+  el.clearArt.addEventListener('click', function(){
+    S.images = [null, null, null, null, null, null, null];
+    render();
+  });
+
+  /* drops that miss a tile fill the whole mosaic */
+  el.stage.addEventListener('dragenter', function(e){ e.preventDefault(); el.stage.classList.add('over'); });
+  el.stage.addEventListener('dragover', function(e){
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    el.stage.classList.add('over');
+  });
+  el.stage.addEventListener('dragleave', function(e){
+    if (e.target === el.stage) el.stage.classList.remove('over');
+  });
+  el.stage.addEventListener('drop', function(e){
+    e.preventDefault();
+    el.stage.classList.remove('over');
+    acceptFiles(e.dataTransfer && e.dataTransfer.files, 'all');
+  });
+
+  /* ---- overlay ---- */
+  function setOverlay(on){
+    S.overlay = on;
+    el.overlayToggle.checked = on;
+    render();
+  }
+  el.overlayToggle.addEventListener('change', function(){ setOverlay(el.overlayToggle.checked); });
+  window.addEventListener('keydown', function(e){
+    if (e.key !== 'o' && e.key !== 'O') return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    e.preventDefault();
+    setOverlay(!S.overlay);
+    flash(S.overlay ? 'Overlay on' : 'Overlay off — press O to bring it back');
+  });
+
+  /* ---- canvas background ---- */
+  var BGS = [
+    {v:null,      t:'Theme default'},
+    {v:'#000000', t:'True black — OLED'},
+    {v:'#0B1416', t:'Near black'},
+    {v:'#1D2429', t:'Charcoal'},
+    {v:'#6E7478', t:'Neutral grey'},
+    {v:'#F2F2F0', t:'Off white'},
+    {v:'#FFFFFF', t:'White'}
+  ];
+
+  function relLum(hex){
+    function ch(v){ v /= 255; return v <= 0.03928 ? v/12.92 : Math.pow((v + 0.055)/1.055, 2.4); }
+    var r = parseInt(hex.substr(1,2),16), g = parseInt(hex.substr(3,2),16), b = parseInt(hex.substr(5,2),16);
+    return 0.2126*ch(r) + 0.7152*ch(g) + 0.0722*ch(b);
+  }
+
+  function applyBg(){
+    if (!S.bg){
+      el.stage.style.background = '';
+      el.stage.style.removeProperty('--stage-ink');
+      el.stage.style.removeProperty('--stage-line');
+      if (document.activeElement !== el.bgHex) el.bgHex.value = 'Theme default';
+    } else {
+      el.stage.style.background = S.bg;
+      var dark = relLum(S.bg) < 0.3;
+      el.stage.style.setProperty('--stage-ink',  dark ? 'rgba(255,255,255,.66)' : 'rgba(0,0,0,.56)');
+      el.stage.style.setProperty('--stage-line', dark ? 'rgba(255,255,255,.3)'  : 'rgba(0,0,0,.26)');
+      el.bgColor.value = S.bg;
+      if (document.activeElement !== el.bgHex) el.bgHex.value = S.bg.toUpperCase();
+    }
+    var btns = el.swatches.children;
+    for (var i = 0; i < btns.length; i++){
+      btns[i].setAttribute('aria-pressed', String(btns[i].dataset.v === (S.bg || '')));
+    }
+  }
+
+  function setBg(v){ S.bg = v; applyBg(); }
+
+  (function buildSwatches(){
+    BGS.forEach(function(o){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'sw' + (o.v ? '' : ' theme');
+      b.dataset.v = o.v || '';
+      b.title = o.t;
+      b.setAttribute('aria-label', o.t);
+      if (o.v) b.style.background = o.v;
+      b.addEventListener('click', function(){ setBg(o.v); });
+      el.swatches.appendChild(b);
+    });
+  })();
+
+  el.bgColor.addEventListener('input', function(){ setBg(el.bgColor.value); });
+  el.bgHex.addEventListener('change', function(){
+    var raw = el.bgHex.value.trim();
+    if (!raw || /^theme/i.test(raw)){ setBg(null); return; }
+    var m = /^#?([0-9a-f]{6})$/i.exec(raw);
+    if (m) setBg('#' + m[1].toLowerCase());
+    else applyBg();
+  });
+
+  window.addEventListener('dragover', function(e){ e.preventDefault(); });
+  window.addEventListener('drop', function(e){ e.preventDefault(); });
+  window.addEventListener('paste', function(e){
+    var f = e.clipboardData && e.clipboardData.files;
+    if (f && f.length) acceptFiles(f, 'all');
+  });
+
+  el.resetBtn.addEventListener('click', function(){
+    S.W = 960; S.g = 12; S.gRatio = 12/960; S.r = 2; S.locked = true; S.dims = true; S.art = true;
+    S.fit = 'cover';
+    S.overlay = true;
+    S.images = [null, null, null, null, null, null, null];
+    el.lockToggle.checked = true;
+    el.dimsToggle.checked = true;
+    el.artToggle.checked = true;
+    el.overlayToggle.checked = true;
+    document.getElementById('fitCover').checked = true;
+    setBg(null);
+    thaw();
+  });
+
+  el.copyBtn.addEventListener('click', function(){
+    var G = geom(S.W, S.g);
+    var txt = [
+      'Mosaic  ' + f1(S.W) + ' x ' + f1(G.H) + ' px   ratio 1 : ' + (G.H/S.W).toFixed(3),
+      'Gutter  ' + f1(S.g) + ' px, uniform',
+      'Radius  ' + f1(S.r) + ' px, every tile corner',
+      '',
+      'Upper band   narrow col ' + f1(G.a) + '   wide col ' + f1(G.b) + '   height ' + f1(G.HA),
+      'Lower band   wide col ' + f1(G.c) + '   narrow col ' + f1(G.d) + '   row height ' + f1(G.Hr),
+      '',
+      'Tiles',
+      '  3:4    ' + f1(G.a) + ' x ' + f1(4*G.a/3) + '   x2',
+      '  3:4    ' + f1(G.b) + ' x ' + f1(G.HA)    + '   x1  (tall, spans 2 rows)',
+      '  16:9   ' + f1(G.c) + ' x ' + f1(G.Hr)    + '   x2',
+      '  3:4    ' + f1(G.d) + ' x ' + f1(G.Hr)    + '   x2'
+    ].join('\n');
+    var done = function(ok){
+      el.copyBtn.textContent = ok ? 'Copied' : 'Copy blocked';
+      setTimeout(function(){ el.copyBtn.textContent = 'Copy spec'; }, 1400);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(function(){ done(true); }, function(){ done(false); });
+    } else { done(false); }
+  });
+
+  var rAF = null;
+  function scheduleRender(){
+    if (rAF) return;
+    rAF = requestAnimationFrame(function(){ rAF = null; render(); });
+  }
+  window.addEventListener('resize', scheduleRender);
+
+  // the canvas itself is user-resizable, so refit whenever its box changes
+  if (window.ResizeObserver){
+    new ResizeObserver(scheduleRender).observe(el.stage);
+  }
+
+  applyBg();
+  render();
+})();
+</script>
